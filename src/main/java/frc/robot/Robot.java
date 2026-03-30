@@ -24,15 +24,18 @@ public class Robot extends TimedRobot {
 
   @Override
   public void teleopPeriodic() {
+    final double xInput = (Math.abs(m_controller.getLeftY()) > 0.1) ? m_controller.getLeftY() : 0;
+    final double yInput = (Math.abs(m_controller.getRightX()) > 0.1) ? m_controller.getRightX() : 0; 
+
     // Get the x speed. We are inverting this because Xbox controllers return
     // negative values when we push forward.
-    final var xSpeed = -m_speedLimiter.calculate(m_controller.getLeftY()) * Drivetrain.kMaxSpeed;
+    final var xSpeed = -m_speedLimiter.calculate(xInput) * Drivetrain.kMaxSpeed;
 
     // Get the rate of angular rotation. We are inverting this because we want a
     // positive value when we pull to the left (remember, CCW is positive in
     // mathematics). Xbox controllers return positive values when you pull to
     // the right by default.
-    final var rot = -m_rotLimiter.calculate(m_controller.getRightX()) * Drivetrain.kMaxAngularSpeed;
+    final var rot = -m_rotLimiter.calculate(yInput) * Drivetrain.kMaxAngularSpeed;
 
     m_drive.drive(xSpeed, rot);
   }

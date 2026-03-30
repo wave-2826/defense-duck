@@ -4,15 +4,14 @@
 
 package frc.robot;
 
-import edu.wpi.first.math.controller.PIDController;
 import edu.wpi.first.math.controller.SimpleMotorFeedforward;
 import edu.wpi.first.math.kinematics.ChassisSpeeds;
 import edu.wpi.first.math.kinematics.DifferentialDriveKinematics;
 import edu.wpi.first.math.kinematics.DifferentialDriveOdometry;
 import edu.wpi.first.math.kinematics.DifferentialDriveWheelSpeeds;
 import edu.wpi.first.wpilibj.AnalogGyro;
-import edu.wpi.first.wpilibj.Encoder;
-import edu.wpi.first.wpilibj.motorcontrol.PWMSparkMax;
+import com.ctre.phoenix.motorcontrol.can.WPI_TalonSRX;
+import com.ctre.phoenix.motorcontrol.NeutralMode;
 
 /** Represents a differential drive style drivetrain. */
 public class Drivetrain {
@@ -20,57 +19,49 @@ public class Drivetrain {
   public static final double kMaxAngularSpeed = 2 * Math.PI; // one rotation per second
 
   private static final double kTrackWidth = 0.381 * 2; // meters
-  private static final double kWheelRadius = 0.0508; // meters
-  private static final int kEncoderResolution = 4096;
 
-  private final PWMSparkMax m_leftLeader = new PWMSparkMax(1);
-  private final PWMSparkMax m_leftFollower = new PWMSparkMax(2);
-  private final PWMSparkMax m_rightLeader = new PWMSparkMax(3);
-  private final PWMSparkMax m_rightFollower = new PWMSparkMax(4);
-
-  private final Encoder m_leftEncoder = new Encoder(0, 1);
-  private final Encoder m_rightEncoder = new Encoder(2, 3);
+  private final WPI_TalonSRX m_leftLeader = new WPI_TalonSRX(1);
+  private final WPI_TalonSRX m_leftFollower = new WPI_TalonSRX(2);
+  private final WPI_TalonSRX m_rightLeader = new WPI_TalonSRX(3);
+  private final WPI_TalonSRX m_rightFollower = new WPI_TalonSRX(4);
 
   private final AnalogGyro m_gyro = new AnalogGyro(0);
-
-  private final PIDController m_leftPIDController = new PIDController(1, 0, 0);
-  private final PIDController m_rightPIDController = new PIDController(1, 0, 0);
 
   private final DifferentialDriveKinematics m_kinematics =
       new DifferentialDriveKinematics(kTrackWidth);
 
   private final DifferentialDriveOdometry m_odometry;
 
-  // Gains are for example purposes only - must be determined for your own robot!
-  private final SimpleMotorFeedforward m_feedforward = new SimpleMotorFeedforward(1, 3);
+  // Gains are for CIM motors - must be tuned for your specific robot!
+  // kS (static gain): ~1.5 for CIM motors to overcome static friction
+  // kV (velocity gain): ~3.0 for drivetrain with CIM motors
+  private final SimpleMotorFeedforward m_feedforward = new SimpleMotorFeedforward(1.5, 3.0);
 
   /**
-   * Constructs a differential drive object. Sets the encoder distance per pulse and resets the
-   * gyro.
+   * Constructs a differential drive object. Sets up CIM motors via TalonSRX for CAN control.
    */
   public Drivetrain() {
     m_gyro.reset();
 
-    m_leftLeader.addFollower(m_leftFollower);
-    m_rightLeader.addFollower(m_rightFollower);
+    // Configure TalonSRX controllers for CIM motors
+    // Set neutral mode to brake for better stopping power
+    m_leftLeader.setNeutralMode(NeutralMode.Brake);
+    m_leftFollower.setNeutralMode(NeutralMode.Brake);
+    m_rightLeader.setNeutralMode(NeutralMode.Brake);
+    m_rightFollower.setNeutralMode(NeutralMode.Brake);
+
+    m_leftFollower.follow(m_leftLeader);
+    m_rightFollower.follow(m_rightLeader);
 
     // We need to invert one side of the drivetrain so that positive voltages
     // result in both sides moving forward. Depending on how your robot's
     // gearbox is constructed, you might have to invert the left side instead.
     m_rightLeader.setInverted(true);
-
-    // Set the distance per pulse for the drive encoders. We can simply use the
-    // distance traveled for one rotation of the wheel divided by the encoder
-    // resolution.
-    m_leftEncoder.setDistancePerPulse(2 * Math.PI * kWheelRadius / kEncoderResolution);
-    m_rightEncoder.setDistancePerPulse(2 * Math.PI * kWheelRadius / kEncoderResolution);
-
-    m_leftEncoder.reset();
-    m_rightEncoder.reset();
+    m_rightFollower.setInverted(true);
 
     m_odometry =
         new DifferentialDriveOdometry(
-            m_gyro.getRotation2d(), m_leftEncoder.getDistance(), m_rightEncoder.getDistance());
+            m_gyro.getRotation2d(), 0.0, 0.0);
   }
 
   /**
@@ -82,12 +73,10 @@ public class Drivetrain {
     final double leftFeedforward = m_feedforward.calculate(speeds.leftMetersPerSecond);
     final double rightFeedforward = m_feedforward.calculate(speeds.rightMetersPerSecond);
 
-    final double leftOutput =
-        m_leftPIDController.calculate(m_leftEncoder.getRate(), speeds.leftMetersPerSecond);
-    final double rightOutput =
-        m_rightPIDController.calculate(m_rightEncoder.getRate(), speeds.rightMetersPerSecond);
-    m_leftLeader.setVoltage(leftOutput + leftFeedforward);
-    m_rightLeader.setVoltage(rightOutput + rightFeedforward);
+    // Without encoders, we rely on TalonSRX native feedback or open-loop voltage control
+    // Set voltage to motor controllers based on feedforward calculations
+    m_leftLeader.setVoltage(leftFeedforward);
+    m_rightLeader.setVoltage(rightFeedforward);
   }
 
   /**
@@ -104,6 +93,6 @@ public class Drivetrain {
   /** Updates the field-relative position. */
   public void updateOdometry() {
     m_odometry.update(
-        m_gyro.getRotation2d(), m_leftEncoder.getDistance(), m_rightEncoder.getDistance());
+        m_gyro.getRotation2d(), 0.0, 0.0);
   }
 }
